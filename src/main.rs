@@ -68,27 +68,27 @@ impl VibraDB {
     }
 
     // Encrypt a value
-    fn encrypt_value(&self, value: &str) -> Vec<u8> {
+    fn encrypt_value(&self, value: &str) -> String {
         let mut encrypted = value.as_bytes().to_vec();
         let iv = self.iv.clone();
         let key = self.key.clone();
+        let cipher = Cbc::<Aes256, Pkcs7>::new_from_slices(&key, &iv).unwrap();
 
         for _ in 0..self.config.aes_layers {
-            let cipher = Cbc::<Aes256, Pkcs7>::new_from_slices(&key, &iv).unwrap();
-            encrypted = cipher.encrypt_vec(&encrypted);
+            encrypted = cipher.clone().encrypt_vec(&encrypted)
         }
-        encrypted
+        String::from_utf8(encrypted).unwrap()
     }
 
     // Decrypt a value
-    fn decrypt_value(&self, encrypted: &[u8]) -> String {
+    fn decrypt_value(&self, encrypted: &str) -> String {
+        let mut decrypted = encrypted.as_bytes().to_vec();
         let iv = self.iv.clone();
-        let mut decrypted = encrypted.to_vec();
         let key = self.key.clone();
+        let cipher = Cbc::<Aes256, Pkcs7>::new_from_slices(&key, &iv).unwrap();
 
         for _ in 0..self.config.aes_layers {
-            let cipher = Cbc::<Aes256, Pkcs7>::new_from_slices(&key, &iv).unwrap();
-            decrypted = cipher.decrypt_vec(&decrypted).unwrap();
+            decrypted = cipher.clone().decrypt_vec(&decrypted).unwrap();
         }
         String::from_utf8(decrypted).unwrap()
     }
@@ -123,13 +123,12 @@ impl VibraDB {
 
         if let Some(ivec) = self.db.get(key).expect("Get failed") {
             let value = String::from_utf8(ivec.to_vec()).unwrap();
+            let mut final_value = value.to_string();
 
-            let final_value = if self.config.encryption_enabled {
-                let decoded = base64::decode(value).unwrap();
-                self.decrypt_value(&decoded)
-            } else {
-                value
-            };
+            if self.config.encryption_enabled {
+                let decrypted = self.decrypt_value(&value);
+                final_value = base64::encode(decrypted);
+            }
 
             let mut cache = self.cache.lock().unwrap();
             cache.put(key.to_string(), final_value.clone());
