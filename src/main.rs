@@ -1,3 +1,73 @@
+//! # VibraDB
+//! VibraDB is a pure rust, realtime key-value store.
+//! 
+//! ## Features
+//! Vibra uses [LAQ-Fort](https://github.com/zanderlewis/laq-fort) for encryption, with customizable fractal depth (encryption) and AES layer multiplier (encryption).
+//! LAQ-Fort has built-in triple Kyber encryption, ensuring all data in a Vibra database is quantum secure.
+//! Encryption is togglable, meaning you can create a new Vibra database without encryption.
+//! 
+//! Vibra also generates a gitignore file on database creation, so no need to add your db to your custom gitignore!
+//! 
+//! ## Usage
+//! ```
+//!use tokio;
+//!use vibradb::*;
+//!#[tokio::main]
+//!async fn main() {
+//!    // Initialize logging
+//!    env_logger::init();
+//!
+//!    // Set up configuration
+//!    let config = VibraConfig {
+//!        path: String::from("vibra_db"),
+//!        cache_size: 100,
+//!        encryption_enabled: true,
+//!        aes_layers: 0,
+//!    };
+//!
+//!    // Initialize VibraDB with custom configurations
+//!    let vibra_db = VibraDB::new(config, generate_key(), generate_iv());
+//!
+//!    // Example usage
+//!    vibra_db.insert("key1", "value1").await;
+//!
+//!    if let Some(value) = vibra_db.get("key1").await {
+//!        println!("Retrieved: {:?}", value);
+//!    }
+//!    if let Some(value) = vibra_db.get("kee1").await {
+//!        println!("Retrieved: {:?}", value);
+//!    }
+//!
+//!    vibra_db.delete("key1").await;
+//!
+//!    vibra_db.insert("key1", "value1").await;
+//!    vibra_db.insert("key2", "value2").await;
+//!    vibra_db.insert("key6", "value6").await;
+//!    vibra_db.insert("kee1", "value0").await;
+//!    vibra_db.insert("key", "value-1").await;
+//!    
+//!    // Range query
+//!    let range_results = vibra_db.range_query("key1", "key5").await;
+//!    println!("{:?}", range_results);
+//!    for (key, value) in range_results {
+//!        println!("Range Result: {} = {}", key, value);
+//!    };
+//!
+//!    vibra_db.delete("key6").await;
+//!
+//!    // Pattern match query
+//!    let pattern_results = vibra_db.pattern_match(r"key\d").await;
+//!    for (key, value) in pattern_results {
+//!        println!("Pattern Result: {} = {}", key, value);
+//!    };
+//!
+//!    vibra_db.delete("key1").await;
+//!    vibra_db.delete("key2").await;
+//!    vibra_db.delete("kee1").await;
+//!    vibra_db.delete("key").await;
+//!}
+//! ```
+
 use sled::Db;
 use tokio;
 use std::sync::{Arc, Mutex};
@@ -16,6 +86,18 @@ use std::fs;
 const AES_KEY_SIZE: usize = 32; // 256 bits
 
 // Configurations for the database
+/// # VibraDB Config
+/// The config is the most important part!
+/// 
+/// ## Usage
+/// ```
+/// let config = VibraConfig {
+///     path: String::from("vibra_db"),
+///     cache_size: 100,
+///     encryption_enabled: true,
+///     aes_layers: 0,
+/// };
+/// ```
 #[derive(Clone)]
 struct VibraConfig {
     path: String,
@@ -24,6 +106,75 @@ struct VibraConfig {
     aes_layers: usize,
 }
 
+/// # VibraDB
+/// VibraDB is a pure rust, realtime key-value store.
+/// 
+/// ## Features
+/// Vibra uses [LAQ-Fort](https://github.com/zanderlewis/laq-fort) for encryption, with customizable fractal depth (encryption) and AES layer multiplier (encryption).
+/// LAQ-Fort has built-in triple Kyber encryption, ensuring all data in a Vibra database is quantum secure.
+/// Encryption is togglable, meaning you can create a new Vibra database without encryption.
+/// 
+/// Vibra also generates a gitignore file on database creation, so no need to add your db to your custom gitignore!
+/// 
+/// ## Usage
+/// ```
+/// use tokio;
+/// use vibradb::*;
+/// #[tokio::main]
+/// async fn main() {
+///     // Initialize logging
+///     env_logger::init();
+/// 
+///     // Set up configuration
+///     let config = VibraConfig {
+///         path: String::from("vibra_db"),
+///         cache_size: 100,
+///         encryption_enabled: true,
+///         aes_layers: 0,
+///     };
+/// 
+///     // Initialize VibraDB with custom configurations
+///     let vibra_db = VibraDB::new(config, generate_key(), generate_iv());
+/// 
+///     // Example usage
+///     vibra_db.insert("key1", "value1").await;
+/// 
+///     if let Some(value) = vibra_db.get("key1").await {
+///         println!("Retrieved: {:?}", value);
+///     }
+///     if let Some(value) = vibra_db.get("kee1").await {
+///         println!("Retrieved: {:?}", value);
+///     }
+/// 
+///     vibra_db.delete("key1").await;
+/// 
+///     vibra_db.insert("key1", "value1").await;
+///     vibra_db.insert("key2", "value2").await;
+///     vibra_db.insert("key6", "value6").await;
+///     vibra_db.insert("kee1", "value0").await;
+///     vibra_db.insert("key", "value-1").await;
+///     
+///     // Range query
+///     let range_results = vibra_db.range_query("key1", "key5").await;
+///     println!("{:?}", range_results);
+///     for (key, value) in range_results {
+///         println!("Range Result: {} = {}", key, value);
+///     };
+/// 
+///     vibra_db.delete("key6").await;
+/// 
+///     // Pattern match query
+///     let pattern_results = vibra_db.pattern_match(r"key\d").await;
+///     for (key, value) in pattern_results {
+///         println!("Pattern Result: {} = {}", key, value);
+///     };
+/// 
+///     vibra_db.delete("key1").await;
+///     vibra_db.delete("key2").await;
+///     vibra_db.delete("kee1").await;
+///     vibra_db.delete("key").await;
+/// }
+/// ```
 #[derive(Clone)]
 struct VibraDB {
     db: Arc<Db>, 
