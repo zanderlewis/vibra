@@ -226,19 +226,27 @@ async fn main() {
     if let Some(value) = vibra_db.get("key1").await {
         println!("Retrieved: {:?}", value);
     }
+    if let Some(value) = vibra_db.get("kee1").await {
+        println!("Retrieved: {:?}", value);
+    }
 
     vibra_db.delete("key1").await;
 
     vibra_db.insert("key1", "value1").await;
     vibra_db.insert("key2", "value2").await;
-
-
+    vibra_db.insert("key6", "value6").await;
+    vibra_db.insert("kee1", "value0").await;
+    vibra_db.insert("key", "value-1").await;
+    
     // Range query
     let range_results = vibra_db.range_query("key1", "key5").await;
     println!("{:?}", range_results);
     for (key, value) in range_results {
         println!("Range Result: {} = {}", key, value);
     };
+
+    vibra_db.delete("key6").await;
+
     // Pattern match query
     let pattern_results = vibra_db.pattern_match(r"key\d").await;
     for (key, value) in pattern_results {
@@ -247,4 +255,6 @@ async fn main() {
 
     vibra_db.delete("key1").await;
     vibra_db.delete("key2").await;
+    vibra_db.delete("kee1").await;
+    vibra_db.delete("key").await;
 }
