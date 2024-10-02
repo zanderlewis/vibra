@@ -17,4 +17,48 @@ vibradb = <vibra_version_here>
 ```
 
 ## Usage
-null
+```rs
+#[tokio::main]
+async fn main() {
+    // Initialize logging
+    env_logger::init();
+
+    // Set up configuration
+    let config = VibraConfig {
+        path: String::from("vibra_db"),
+        cache_size: 100,
+        encryption_enabled: false,
+    };
+
+    // Initialize VibraDB with custom configurations
+    let vibra_db = VibraDB::new(config, generate_aes_key());
+
+    // Example usage
+    vibra_db.insert("key1", "value1").await;
+
+    if let Some(value) = vibra_db.get("key1").await {
+        println!("Retrieved: {:?}", value);
+    }
+
+    vibra_db.delete("key1").await;
+
+    vibra_db.insert("key1", "value1").await;
+    vibra_db.insert("key2", "value2").await;
+
+
+    // Range query
+    let range_results = vibra_db.range_query("key1", "key5").await;
+    println!("{:?}", range_results);
+    for (key, value) in range_results {
+        println!("Range Result: {} = {}", key, value);
+    };
+    // Pattern match query
+    let pattern_results = vibra_db.pattern_match(r"key\d").await;
+    for (key, value) in pattern_results {
+        println!("Pattern Result: {} = {}", key, value);
+    };
+
+    vibra_db.delete("key1").await;
+    vibra_db.delete("key2").await;
+}
+```
