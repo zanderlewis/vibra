@@ -1,0 +1,11 @@
+# [ RUST ] #
+target
+Cargo.lock
+rustc-*.txt
+
+# [ OS ] #
+.DS_Store
+
+# [ IDE ] #
+.idea
+.vscode
