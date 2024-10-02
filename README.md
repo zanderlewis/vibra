@@ -2,7 +2,7 @@
 ## What is Vibra?
 Vibra is a powerful, real-time key-value store that is thread-safe. Vibra takes inspiration from Laravel's Eloquent and SQLite.
 
-Along with its ease-of-use and real-time capabilities, Vibra is powerfully encrypted using a customizable number of AES layers, where the defualt is 15.
+Along with its ease-of-use and real-time capabilities, Vibra is powerfully encrypted using a customizable number of AES-256 layers.
 
 ## Installation
 Vibra can be added to your `Cargo.toml` file like so:
@@ -18,6 +18,9 @@ vibradb = <vibra_version_here>
 
 ## Usage
 ```rs
+use tokio;
+use vibradb::*;
+
 #[tokio::main]
 async fn main() {
     // Initialize logging
@@ -28,6 +31,7 @@ async fn main() {
         path: String::from("vibra_db"),
         cache_size: 100,
         encryption_enabled: false,
+        aes_layers: 0, // One layer
     };
 
     // Initialize VibraDB with custom configurations
@@ -52,12 +56,14 @@ async fn main() {
     for (key, value) in range_results {
         println!("Range Result: {} = {}", key, value);
     };
+
     // Pattern match query
     let pattern_results = vibra_db.pattern_match(r"key\d").await;
     for (key, value) in pattern_results {
         println!("Pattern Result: {} = {}", key, value);
     };
 
+    // Delete keys after use (for this example)
     vibra_db.delete("key1").await;
     vibra_db.delete("key2").await;
 }

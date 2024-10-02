@@ -14,7 +14,6 @@ use std::fs;
 
 // Constants for AES encryption (key and block sizes)
 const AES_KEY_SIZE: usize = 32; // 256 bits
-const AES_BLOCK_SIZE: usize = 16; // 128 bits
 
 // Configurations for the database
 #[derive(Clone)]
@@ -30,17 +29,23 @@ struct VibraDB {
     db: Arc<Db>, 
     cache: Arc<Mutex<LruCache<String, String>>>, 
     key: Vec<u8>,
+    iv: [u8; 16],
     config: VibraConfig,
 }
 
 // Generate a random 256-bit AES key
-pub fn generate_aes_key() -> Vec<u8> {
+pub fn generate_key() -> Vec<u8> {
     rand::thread_rng().gen::<[u8; AES_KEY_SIZE]>().to_vec()
+}
+
+// Generate a random IV key
+pub fn generate_iv() -> [u8; 16] {
+    rand::thread_rng().gen::<[u8; 16]>()
 }
 
 impl VibraDB {
     // Create a new instance of VibraDB with custom configurations
-    pub fn new(config: VibraConfig, key: Vec<u8>) -> VibraDB {
+    pub fn new(config: VibraConfig, key: Vec<u8>, iv: [u8; 16]) -> VibraDB {
         let db = sled::open(&config.path).expect("Failed to open VibraDB");
         info!("VibraDB initialized at {}", config.path);
 
@@ -57,6 +62,7 @@ impl VibraDB {
             db: Arc::new(db),
             cache: Arc::new(Mutex::new(cache)),
             key,
+            iv,
             config,
         }
     }
@@ -64,7 +70,7 @@ impl VibraDB {
     // Encrypt a value
     fn encrypt_value(&self, value: &str) -> Vec<u8> {
         let mut encrypted = value.as_bytes().to_vec();
-        let iv = rand::thread_rng().gen::<[u8; AES_BLOCK_SIZE]>();
+        let iv = self.iv.clone();
         let key = self.key.clone();
 
         for _ in 0..self.config.aes_layers {
@@ -76,7 +82,7 @@ impl VibraDB {
 
     // Decrypt a value
     fn decrypt_value(&self, encrypted: &[u8]) -> String {
-        let iv = rand::thread_rng().gen::<[u8; AES_BLOCK_SIZE]>();
+        let iv = self.iv.clone();
         let mut decrypted = encrypted.to_vec();
         let key = self.key.clone();
 
@@ -202,12 +208,12 @@ async fn main() {
     let config = VibraConfig {
         path: String::from("vibra_db"),
         cache_size: 100,
-        encryption_enabled: false,
-        aes_layers: 100,
+        encryption_enabled: true,
+        aes_layers: 0,
     };
 
     // Initialize VibraDB with custom configurations
-    let vibra_db = VibraDB::new(config, generate_aes_key());
+    let vibra_db = VibraDB::new(config, generate_key(), generate_iv());
 
     // Example usage
     vibra_db.insert("key1", "value1").await;
