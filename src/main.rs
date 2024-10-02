@@ -46,12 +46,18 @@ pub fn generate_iv() -> [u8; 16] {
 impl VibraDB {
     // Create a new instance of VibraDB with custom configurations
     pub fn new(config: VibraConfig, key: Vec<u8>, iv: [u8; 16]) -> VibraDB {
-        let db = sled::open(&config.path).expect("Failed to open VibraDB");
-        info!("VibraDB initialized at {}", config.path);
+        let mut c = config.clone();
+        if c.encryption_enabled {
+            println!("Encryption is currently a work in progress.");
+            println!("Disabling...\n===============");
+            c.encryption_enabled = false;
+        }
+        let db = sled::open(&c.path).expect("Failed to open VibraDB");
+        info!("VibraDB initialized at {}", c.path);
 
-        let cache = LruCache::new(config.cache_size);
+        let cache = LruCache::new(c.cache_size);
 
-        let lpath = config.path.clone() + "/";
+        let lpath = c.path.clone() + "/";
         let rpath = ".gitignore".to_string();
         let path = lpath + &rpath;
         // Create a .gitignore file to automatically ignore the db.
@@ -63,7 +69,7 @@ impl VibraDB {
             cache: Arc::new(Mutex::new(cache)),
             key,
             iv,
-            config,
+            config: c,
         }
     }
 
