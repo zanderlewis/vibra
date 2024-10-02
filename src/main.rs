@@ -15,7 +15,6 @@ use std::fs;
 // Constants for AES encryption (key and block sizes)
 const AES_KEY_SIZE: usize = 32; // 256 bits
 const AES_BLOCK_SIZE: usize = 16; // 128 bits
-const AES_LAYERS: usize = 5; // 5 AES layers
 
 // Configurations for the database
 #[derive(Clone)]
@@ -23,6 +22,7 @@ struct VibraConfig {
     path: String,
     cache_size: usize,
     encryption_enabled: bool,
+    aes_layers: usize,
 }
 
 #[derive(Clone)]
@@ -67,7 +67,7 @@ impl VibraDB {
         let iv = rand::thread_rng().gen::<[u8; AES_BLOCK_SIZE]>();
         let key = self.key.clone();
 
-        for _ in 0..AES_LAYERS {
+        for _ in 0..self.config.aes_layers {
             let cipher = Cbc::<Aes256, Pkcs7>::new_from_slices(&key, &iv).unwrap();
             encrypted = cipher.encrypt_vec(&encrypted);
         }
@@ -80,7 +80,7 @@ impl VibraDB {
         let mut decrypted = encrypted.to_vec();
         let key = self.key.clone();
 
-        for _ in 0..AES_LAYERS {
+        for _ in 0..self.config.aes_layers {
             let cipher = Cbc::<Aes256, Pkcs7>::new_from_slices(&key, &iv).unwrap();
             decrypted = cipher.decrypt_vec(&decrypted).unwrap();
         }
@@ -203,6 +203,7 @@ async fn main() {
         path: String::from("vibra_db"),
         cache_size: 100,
         encryption_enabled: false,
+        aes_layers: 100,
     };
 
     // Initialize VibraDB with custom configurations
