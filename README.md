@@ -1,4 +1,5 @@
 # VibraDB
+[![Rust](https://github.com/zanderlewis/vibra/actions/workflows/rust.yml/badge.svg)](https://github.com/zanderlewis/vibra/actions/workflows/rust.yml)
 ## What is Vibra?
 Vibra is a powerful and fast database that is thread-safe. Vibra takes inspiration from Laravel's Eloquent and SQLite.
 
