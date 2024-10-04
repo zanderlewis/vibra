@@ -2,6 +2,11 @@
 name = "vibradb"
 version = "0.0.1"
 edition = "2021"
+authors = ["Zander Lewis <zander@zanderlewis.dev>"]
+description = "A simple, fast, and secure database."
+license = "APACHE-2.0"
+repository = "https://github.com/zanderle/vibra"
+readme = "README.md"
 
 [dependencies]
 sled = "0.34.7"
