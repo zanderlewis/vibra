@@ -13,35 +13,33 @@ use std::str;
 use std::fs;
 use aes_gcm::aead::generic_array::typenum::U12;
 use tokio::task;
+use rayon::prelude::*;
+use std::sync::RwLock;
 
 const AES_LAYERS: usize = 25; // 25 layers of encryption
 
 #[derive(Clone)]
 pub struct VibraDB {
     db: Arc<Db>,
-    cache: Arc<Mutex<LruCache<String, String>>>,
+    cache: Arc<RwLock<LruCache<String, String>>>,
     path: String,
 }
 
 impl VibraDB {
     // Create a new instance of VibraDB with custom configurations
     pub fn new(config: VibraConfig) -> VibraDB {
-        let db = sled::open(&config.path).expect("Failed to open VibraDB");
-        info!("VibraDB initialized at {}", config.path);
-
-        let cache = LruCache::new(config.cache_size);
-
-        let lpath = config.path.clone() + "/";
+        let db_path = config.path.as_ref().expect("Config path is None");
+        let db = sled::open(db_path).expect("Failed to open VibraDB");
+        info!("VibraDB initialized at {:?}", config.path);
+        let cache = LruCache::new(config.cache_size.expect("Cache size is None"));
+        let lpath = config.path.clone().expect("Config path is None") + "/";
         let rpath = ".gitignore".to_string();
         let path = lpath + &rpath;
-        // Create a .gitignore file to automatically ignore the db.
-        let f = fs::write(path, b"*\n");
-        drop(f);
-
+        fs::write(path, b"*\n").expect("Failed to write .gitignore");
         VibraDB {
             db: Arc::new(db),
-            cache: Arc::new(Mutex::new(cache)),
-            path: config.path,
+            cache: Arc::new(RwLock::new(cache)),
+            path: config.path.expect("Config path is None"),
         }
     }
 
@@ -57,35 +55,58 @@ impl VibraDB {
         Nonce::<U12>::from_slice(&nonce).clone()
     }
 
-    // Encrypt value with 25 layers of AES using SIMD
+    // Encrypt value with 25 layers of AES
     fn encrypt_value(&self, value: &str) -> (Vec<u8>, Vec<u8>, Vec<u8>) {
-        let mut encrypted_data = value.as_bytes().to_vec();
-        let mut key = vec![];
-        let mut nonce = vec![];
-        for _ in 0..AES_LAYERS {
-            let k = Self::generate_key();
-            let cipher = Aes256Gcm::new(&k);
-            let n = Self::generate_nonce();
-            encrypted_data = cipher.encrypt(&n, encrypted_data.as_ref())
-                .expect("Encryption failed");
-            key.extend_from_slice(k.as_slice());
-            nonce.extend_from_slice(n.as_slice());
-        }
+        let encrypted_data = value.as_bytes().to_vec();
+        let key = Mutex::new(vec![0u8; AES_LAYERS * 32]);
+        let nonce = Mutex::new(vec![0u8; AES_LAYERS * 12]);
+
+        let encrypted_data = (0..AES_LAYERS).into_par_iter().fold(
+            || encrypted_data.clone(),
+            |mut data, i| {
+                let k = Self::generate_key();
+                let cipher = Aes256Gcm::new(&k);
+                let n = Self::generate_nonce();
+                data = cipher.encrypt(&n, data.as_ref()).expect("Encryption failed");
+
+                {
+                    let mut key_guard = key.lock().unwrap();
+                    key_guard[i * 32..(i + 1) * 32].copy_from_slice(k.as_slice());
+                }
+
+                {
+                    let mut nonce_guard = nonce.lock().unwrap();
+                    nonce_guard[i * 12..(i + 1) * 12].copy_from_slice(n.as_slice());
+                }
+
+                data
+            },
+        ).reduce(|| encrypted_data.clone(), |a, _| a);
+
+        let key = key.into_inner().unwrap();
+        let nonce = nonce.into_inner().unwrap();
+
         (encrypted_data, key, nonce)
     }
 
-    // Decrypt value with 25 layers of AES using SIMD
+    // Decrypt value with 25 layers of AES
     fn decrypt_value(&self, encrypted_data: &[u8], key: &[u8], nonce: &[u8]) -> Result<String, String> {
-        let mut data = encrypted_data.to_vec();
-        for i in 0..AES_LAYERS {
-            let k = Key::<Aes256Gcm>::from_slice(&key[i*32..(i+1)*32]);
-            let cipher = Aes256Gcm::new(k);
-            let n = Nonce::<U12>::from_slice(&nonce[i*12..(i+1)*12]);
-            data = match cipher.decrypt(n, data.as_ref()) {
-                Ok(decrypted_data) => decrypted_data,
-                Err(_) => return Err("Decryption failed".to_string()),
-            };
-        }
+        let data = encrypted_data.to_vec();
+
+        let data = (0..AES_LAYERS).into_par_iter().fold(
+            || data.clone(),
+            |mut data, i| {
+                let k = Key::<Aes256Gcm>::from_slice(&key[i * 32..(i + 1) * 32]);
+                let cipher = Aes256Gcm::new(k);
+                let n = Nonce::<U12>::from_slice(&nonce[i * 12..(i + 1) * 12]);
+                data = match cipher.decrypt(n, data.as_ref()) {
+                    Ok(decrypted_data) => decrypted_data,
+                    Err(_) => return data, // Return the current data in case of decryption failure
+                };
+                data
+            },
+        ).reduce(|| data.clone(), |a, _| a);
+
         match String::from_utf8(data) {
             Ok(valid_string) => Ok(valid_string),
             Err(_) => Err("Invalid UTF-8 sequence".to_string()),
@@ -123,7 +144,7 @@ impl VibraDB {
         combined_data.extend_from_slice(&nonce_data);
 
         {
-            let mut cache = self.cache.lock().unwrap();
+            let mut cache = self.cache.write().unwrap();
             cache.put(key.clone(), data.clone()); // Cache stores the plaintext
         }
 
@@ -148,22 +169,21 @@ impl VibraDB {
     pub async fn get_row(&self, table_name: &str, row_id: &str) -> Option<Row> {
         let key = format!("{}/{}", table_name, row_id);
         {
-            let mut cache = self.cache.lock().unwrap();
+            let mut cache = self.cache.write().unwrap();
             if let Some(value) = cache.get(&key) {
                 info!("Cache hit for key: {}", key);
                 let columns: Vec<(String, String)> = serde_json::from_str(value).expect("Deserialization failed");
                 return Some(Row { id: row_id.to_string(), columns });
             }
         }
-
         if let Some(ivec) = self.db.get(&key).expect("Get row failed") {
             let (encrypted_data, key_nonce) = ivec.split_at(ivec.len() - (AES_LAYERS * (32 + 12)));
             let (key, nonce) = key_nonce.split_at(AES_LAYERS * 32);
             match self.decrypt_value(encrypted_data, key, nonce) {
                 Ok(decrypted_value) => {
                     let columns: Vec<(String, String)> = serde_json::from_str(&decrypted_value).expect("Deserialization failed");
-                    let mut cache = self.cache.lock().unwrap();
-                    cache.put(String::from_utf8_lossy(key).to_string(), decrypted_value.clone());
+                    let mut cache = self.cache.write().unwrap();
+                    cache.put(String::from_utf8(key.to_vec()).expect("Invalid UTF-8 sequence"), decrypted_value.clone());
                     info!("Cache miss, fetched from DB and decrypted: {:?}", key);
                     Some(Row { id: row_id.to_string(), columns })
                 },
@@ -194,7 +214,7 @@ impl VibraDB {
         task::spawn_blocking(move || {
             db.remove(&key).expect("Delete row failed");
             {
-                let mut cache = cache.lock().unwrap();
+                let mut cache = cache.write().unwrap();
                 cache.pop(key.as_str());
             }
             info!("Deleted row from table {}: {}", table_name_clone, row_id_clone);
@@ -208,7 +228,7 @@ impl VibraDB {
         let db = self.db.clone();
         let cache = self.cache.clone();
         task::spawn_blocking(move || {
-            let mut cache = cache.lock().unwrap();
+            let mut cache = cache.write().unwrap();
             let mut keys_to_remove = vec![];
             for key in cache.iter() {
                 if key.0.starts_with(&table_name) {
@@ -241,7 +261,7 @@ impl VibraDB {
         let db = self.db.clone();
         let cache = self.cache.clone();
         task::spawn_blocking(move || {
-            let mut cache = cache.lock().unwrap();
+            let mut cache = cache.write().unwrap();
             cache.clear();
             db.clear().expect("Truncate DB failed");
             info!("Truncated DB");
