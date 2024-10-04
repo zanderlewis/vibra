@@ -3,7 +3,6 @@ use crate::models::Row;
 use aes_gcm::aead::generic_array::typenum::U12;
 use aes_gcm::aead::{Aead, KeyInit};
 use aes_gcm::{Aes256Gcm, Key, Nonce};
-#[allow(unused_imports)]
 use log::{error, info};
 use lru::LruCache;
 use rand::Rng;
@@ -15,6 +14,7 @@ use std::sync::RwLock;
 use std::sync::{Arc, Mutex};
 use tokio;
 use tokio::task;
+use futures::future::join_all;
 
 const AES_LAYERS: usize = 25; // 25 layers of encryption
 
@@ -197,7 +197,6 @@ impl VibraDB {
     }
 
     // Delete a table
-    #[allow(dead_code)]
     pub async fn delete_table(&self, table_name: &str) {
         let db = self.db.clone();
         let table_name = table_name.to_string();
@@ -250,7 +249,6 @@ impl VibraDB {
     }
 
     // Insert rows into a table
-    #[allow(dead_code)]
     pub async fn insert_rows(&self, table_name: &str, rows: Vec<Row>) {
         for row in rows {
             self.insert_row(table_name, row).await;
@@ -301,10 +299,26 @@ impl VibraDB {
     }
 
     // Update a row in a table
-    #[allow(dead_code)]
     pub async fn update_row(&self, table_name: &str, row: Row) {
         self.delete_row(table_name, &row.id).await;
         self.insert_row(table_name, row).await;
+    }
+
+    // Insert many rows into a table
+    pub async fn insert_many_rows(&self, table_name: &str, rows: Vec<Row>) {
+        let mut handles = vec![];
+
+        for row in rows {
+            let table_name = table_name.to_string();
+            let db_clone = self.clone();
+            let handle = tokio::spawn(async move {
+                db_clone.insert_row(&table_name, row).await;
+            });
+            handles.push(handle);
+        }
+
+        // Wait for all tasks to complete
+        join_all(handles).await;
     }
 
     // Check if a table exists
@@ -348,7 +362,6 @@ impl VibraDB {
     }
 
     // Truncate a table
-    #[allow(dead_code)]
     pub async fn truncate_table(&self, table_name: &str) {
         let table_name = table_name.to_string();
         let db = self.db.clone();
@@ -384,7 +397,6 @@ impl VibraDB {
     }
 
     // Truncate DB
-    #[allow(dead_code)]
     pub async fn truncate_db(&self) {
         let db = self.db.clone();
         let cache = self.cache.clone();
@@ -399,7 +411,6 @@ impl VibraDB {
     }
 
     // Delete DB
-    #[allow(dead_code)]
     pub async fn delete_db(&self) {
         // Close the DB first
         drop(self.db.clone());

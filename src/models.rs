@@ -1,11 +1,13 @@
-#[derive(Clone, PartialEq, Debug)]
+use serde::Serialize;
+
+#[derive(Clone, PartialEq, Debug, Serialize)]
 #[allow(dead_code)]
 pub struct Column {
     pub name: String,
     pub data_type: String,
 }
 
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug, Serialize)]
 /// Represents a row in a table with an identifier and a collection of columns.
 ///
 /// # Fields
