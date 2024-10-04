@@ -1,11 +1,11 @@
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Debug)]
 #[allow(dead_code)]
 pub struct Column {
     pub name: String,
     pub data_type: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 /// Represents a row in a table with an identifier and a collection of columns.
 ///
 /// # Fields

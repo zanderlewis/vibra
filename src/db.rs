@@ -180,9 +180,17 @@ impl VibraDB {
         let db = self.db.clone();
         let table_name = table_name.to_string();
         task::spawn_blocking(move || {
-            db.insert(table_name.as_bytes(), b"")
-                .expect("Create table failed");
-            info!("Created table: {}", table_name);
+            let result = db.insert(table_name.as_bytes(), b"");
+            match result {
+                Ok(_) => info!("Created table: {}", table_name),
+                Err(e) => error!("Failed to create table: {}", e),
+            }
+            // Verify the table creation
+            match db.get(table_name.as_bytes()) {
+                Ok(Some(_)) => info!("Verified table creation: {}", table_name),
+                Ok(None) => error!("Table creation not verified: {}", table_name),
+                Err(e) => error!("Error verifying table creation: {}", e),
+            }
         })
         .await
         .unwrap();
@@ -194,9 +202,22 @@ impl VibraDB {
         let db = self.db.clone();
         let table_name = table_name.to_string();
         task::spawn_blocking(move || {
-            db.remove(table_name.as_bytes())
-                .expect("Delete table failed");
-            info!("Deleted table: {}", table_name);
+            // Remove all rows associated with the table
+            let prefix = format!("{}/", table_name);
+            let mut batch = sled::Batch::default();
+            for key in db.scan_prefix(&prefix) {
+                if let Ok((k, _)) = key {
+                    batch.remove(k);
+                }
+            }
+            db.apply_batch(batch).expect("Delete table failed");
+
+            // Remove the table entry itself
+            let result = db.remove(table_name.as_bytes());
+            match result {
+                Ok(_) => println!("Deleted table: {}", table_name),
+                Err(e) => println!("Failed to delete table: {}", e),
+            }
         })
         .await
         .unwrap();
@@ -286,6 +307,24 @@ impl VibraDB {
         self.insert_row(table_name, row).await;
     }
 
+    // Check if a table exists
+    pub async fn table_exists(&self, table_name: &str) -> bool {
+        match self.db.get(table_name.as_bytes()) {
+            Ok(Some(_)) => {
+                info!("Table {} exists", table_name);
+                true
+            }
+            Ok(None) => {
+                info!("Table {} does not exist", table_name);
+                false
+            }
+            Err(e) => {
+                error!("Error checking if table {} exists: {}", table_name, e);
+                false
+            }
+        }
+    }
+
     // Delete a row from a table
     pub async fn delete_row(&self, table_name: &str, row_id: &str) {
         let key = format!("{}/{}", table_name, row_id);
@@ -370,3 +409,6 @@ impl VibraDB {
         fs::remove_dir_all(path).expect("Delete DB failed");
     }
 }
+
+#[cfg(test)]
+mod db_tests;
