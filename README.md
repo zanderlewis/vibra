@@ -14,7 +14,7 @@ version = "0.0.1"
 edition = "2021"
 
 [dependencies]
-vibradb = <vibra_version_here>
+vibradb = "<vibra_version_here>"
 ```
 
 ## Vibra.toml
@@ -29,6 +29,7 @@ enctyption_layers = 10
 ```rs
 use vibradb::{VibraConfig, VibraDB, Row};
 use tokio;
+
 #[tokio::main]
 async fn main() {
 
