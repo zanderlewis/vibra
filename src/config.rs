@@ -30,7 +30,11 @@ pub struct VibraConfig {
 /// # Example
 ///
 /// ```rust
-/// let config = VibraConfig::init()?;
+/// use vibradb::VibraConfig;
+/// fn main() -> Result<(), Box<dyn std::error::Error>> {
+///     let config = VibraConfig::init()?;
+///     Ok(())
+/// }
 /// ```
 impl VibraConfig {
     #[allow(unused)]
@@ -47,7 +51,7 @@ impl VibraConfig {
         }
 
         let config_content = fs::read_to_string(file_path)?;
-        let config: VibraConfig = toml::from_str(&config_content)?;
+        let config: VibraConfig = toml::from_str(&config_content).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
         // Fill in the default values
         let path = config.path.unwrap_or_else(|| String::from("vibra.db"));

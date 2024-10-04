@@ -80,7 +80,7 @@ impl VibraDB {
         let db_path = config.path.as_ref().expect("Config path is None");
         let db = sled::open(db_path).expect("Failed to open VibraDB");
         info!("VibraDB initialized at {:?}", config.path);
-        let cache = LruCache::new(config.cache_size.expect("Cache size is None"));
+        let cache = LruCache::new(std::num::NonZero::new(config.cache_size.expect("Cache size is None")).unwrap());
         let lpath = config.path.clone().expect("Config path is None") + "/";
         let rpath = ".gitignore".to_string();
         let path = lpath + &rpath;
