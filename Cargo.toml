@@ -1,11 +1,11 @@
 [package]
 name = "vibradb"
-version = "0.0.1"
+version = "0.0.2"
 edition = "2021"
 authors = ["Zander Lewis <zander@zanderlewis.dev>"]
 description = "A simple, fast, and secure database."
 license = "Apache-2.0"
-repository = "https://github.com/zanderle/vibra"
+repository = "https://github.com/zanderlewis/vibra"
 readme = "README.md"
 
 [dependencies]
