@@ -25,6 +25,55 @@ pub struct VibraDB {
     path: String,
 }
 
+/// `VibraDB` is a database abstraction that provides functionalities for creating, managing, and interacting with a database.
+/// It supports encryption with multiple layers of AES, caching, and asynchronous operations.
+///
+/// # Methods
+///
+/// - `new(config: VibraConfig) -> VibraDB`
+///   - Creates a new instance of `VibraDB` with custom configurations.
+///
+/// - `generate_key() -> Key<Aes256Gcm>`
+///   - Generates a random AES256 key.
+///
+/// - `generate_nonce() -> Nonce<U12>`
+///   - Generates a random nonce.
+///
+/// - `encrypt_value(&self, value: &str) -> (Vec<u8>, Vec<u8>, Vec<u8>)`
+///   - Encrypts a value with 25 layers of AES encryption.
+///
+/// - `decrypt_value(&self, encrypted_data: &[u8], key: &[u8], nonce: &[u8]) -> Result<String, String>`
+///   - Decrypts a value with 25 layers of AES decryption.
+///
+/// - `create_table(&self, table_name: &str)`
+///   - Creates a new table in the database.
+///
+/// - `delete_table(&self, table_name: &str)`
+///   - Deletes a table from the database.
+///
+/// - `insert_row(&self, table_name: &str, row: Row)`
+///   - Inserts a row into a table.
+///
+/// - `insert_rows(&self, table_name: &str, rows: Vec<Row>)`
+///   - Inserts multiple rows into a table.
+///
+/// - `get_row(&self, table_name: &str, row_id: &str) -> Option<Row>`
+///   - Retrieves a row from a table.
+///
+/// - `update_row(&self, table_name: &str, row: Row)`
+///   - Updates a row in a table.
+///
+/// - `delete_row(&self, table_name: &str, row_id: &str)`
+///   - Deletes a row from a table.
+///
+/// - `truncate_table(&self, table_name: &str)`
+///   - Truncates a table, removing all its rows.
+///
+/// - `truncate_db(&self)`
+///   - Truncates the entire database, removing all data.
+///
+/// - `delete_db(&self)`
+///   - Deletes the entire database, including its directory.
 impl VibraDB {
     // Create a new instance of VibraDB with custom configurations
     pub fn new(config: VibraConfig) -> VibraDB {
