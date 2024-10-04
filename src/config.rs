@@ -1,9 +1,9 @@
+use log::info;
 use serde::Deserialize;
 use std::fs;
 use std::io;
 use std::path::Path;
 use toml;
-use log::info;
 
 #[derive(Deserialize)]
 pub struct VibraConfig {
@@ -13,22 +13,22 @@ pub struct VibraConfig {
 }
 
 /// Initializes the `VibraConfig` by reading the configuration from a `Vibra.toml` file.
-/// 
+///
 /// If the `Vibra.toml` file does not exist, it uses default values for the configuration.
-/// 
+///
 /// # Returns
-/// 
+///
 /// * `Ok(Self)` - If the configuration is successfully initialized from the file or defaults.
 /// * `Err(io::Error)` - If there is an error reading the configuration file.
-/// 
+///
 /// # Default Values
-/// 
+///
 /// * `path`: "vibra.db"
 /// * `cache_size`: 1024
 /// * `encryption_layers`: 10
-/// 
+///
 /// # Example
-/// 
+///
 /// ```rust
 /// let config = VibraConfig::init()?;
 /// ```

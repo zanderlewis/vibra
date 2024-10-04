@@ -1,20 +1,20 @@
 use crate::config::VibraConfig;
 use crate::models::Row;
-use aes_gcm::{Aes256Gcm, Key, Nonce};
-use aes_gcm::aead::{Aead, KeyInit};
-use rand::Rng;
-use sled::Db;
-use tokio;
-use std::sync::{Arc, Mutex};
-#[allow(unused_imports)]
-use log::{info, error};
-use lru::LruCache;
-use std::str;
-use std::fs;
 use aes_gcm::aead::generic_array::typenum::U12;
-use tokio::task;
+use aes_gcm::aead::{Aead, KeyInit};
+use aes_gcm::{Aes256Gcm, Key, Nonce};
+#[allow(unused_imports)]
+use log::{error, info};
+use lru::LruCache;
+use rand::Rng;
 use rayon::prelude::*;
+use sled::Db;
+use std::fs;
+use std::str;
 use std::sync::RwLock;
+use std::sync::{Arc, Mutex};
+use tokio;
+use tokio::task;
 
 const AES_LAYERS: usize = 25; // 25 layers of encryption
 
@@ -110,27 +110,32 @@ impl VibraDB {
         let key = Mutex::new(vec![0u8; AES_LAYERS * 32]);
         let nonce = Mutex::new(vec![0u8; AES_LAYERS * 12]);
 
-        let encrypted_data = (0..AES_LAYERS).into_par_iter().fold(
-            || encrypted_data.clone(),
-            |mut data, i| {
-                let k = Self::generate_key();
-                let cipher = Aes256Gcm::new(&k);
-                let n = Self::generate_nonce();
-                data = cipher.encrypt(&n, data.as_ref()).expect("Encryption failed");
+        let encrypted_data = (0..AES_LAYERS)
+            .into_par_iter()
+            .fold(
+                || encrypted_data.clone(),
+                |mut data, i| {
+                    let k = Self::generate_key();
+                    let cipher = Aes256Gcm::new(&k);
+                    let n = Self::generate_nonce();
+                    data = cipher
+                        .encrypt(&n, data.as_ref())
+                        .expect("Encryption failed");
 
-                {
-                    let mut key_guard = key.lock().unwrap();
-                    key_guard[i * 32..(i + 1) * 32].copy_from_slice(k.as_slice());
-                }
+                    {
+                        let mut key_guard = key.lock().unwrap();
+                        key_guard[i * 32..(i + 1) * 32].copy_from_slice(k.as_slice());
+                    }
 
-                {
-                    let mut nonce_guard = nonce.lock().unwrap();
-                    nonce_guard[i * 12..(i + 1) * 12].copy_from_slice(n.as_slice());
-                }
+                    {
+                        let mut nonce_guard = nonce.lock().unwrap();
+                        nonce_guard[i * 12..(i + 1) * 12].copy_from_slice(n.as_slice());
+                    }
 
-                data
-            },
-        ).reduce(|| encrypted_data.clone(), |a, _| a);
+                    data
+                },
+            )
+            .reduce(|| encrypted_data.clone(), |a, _| a);
 
         let key = key.into_inner().unwrap();
         let nonce = nonce.into_inner().unwrap();
@@ -139,22 +144,30 @@ impl VibraDB {
     }
 
     // Decrypt value with 25 layers of AES
-    fn decrypt_value(&self, encrypted_data: &[u8], key: &[u8], nonce: &[u8]) -> Result<String, String> {
+    fn decrypt_value(
+        &self,
+        encrypted_data: &[u8],
+        key: &[u8],
+        nonce: &[u8],
+    ) -> Result<String, String> {
         let data = encrypted_data.to_vec();
 
-        let data = (0..AES_LAYERS).into_par_iter().fold(
-            || data.clone(),
-            |mut data, i| {
-                let k = Key::<Aes256Gcm>::from_slice(&key[i * 32..(i + 1) * 32]);
-                let cipher = Aes256Gcm::new(k);
-                let n = Nonce::<U12>::from_slice(&nonce[i * 12..(i + 1) * 12]);
-                data = match cipher.decrypt(n, data.as_ref()) {
-                    Ok(decrypted_data) => decrypted_data,
-                    Err(_) => return data, // Return the current data in case of decryption failure
-                };
-                data
-            },
-        ).reduce(|| data.clone(), |a, _| a);
+        let data = (0..AES_LAYERS)
+            .into_par_iter()
+            .fold(
+                || data.clone(),
+                |mut data, i| {
+                    let k = Key::<Aes256Gcm>::from_slice(&key[i * 32..(i + 1) * 32]);
+                    let cipher = Aes256Gcm::new(k);
+                    let n = Nonce::<U12>::from_slice(&nonce[i * 12..(i + 1) * 12]);
+                    data = match cipher.decrypt(n, data.as_ref()) {
+                        Ok(decrypted_data) => decrypted_data,
+                        Err(_) => return data, // Return the current data in case of decryption failure
+                    };
+                    data
+                },
+            )
+            .reduce(|| data.clone(), |a, _| a);
 
         match String::from_utf8(data) {
             Ok(valid_string) => Ok(valid_string),
@@ -167,9 +180,12 @@ impl VibraDB {
         let db = self.db.clone();
         let table_name = table_name.to_string();
         task::spawn_blocking(move || {
-            db.insert(table_name.as_bytes(), b"").expect("Create table failed");
+            db.insert(table_name.as_bytes(), b"")
+                .expect("Create table failed");
             info!("Created table: {}", table_name);
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     // Delete a table
@@ -178,9 +194,12 @@ impl VibraDB {
         let db = self.db.clone();
         let table_name = table_name.to_string();
         task::spawn_blocking(move || {
-            db.remove(table_name.as_bytes()).expect("Delete table failed");
+            db.remove(table_name.as_bytes())
+                .expect("Delete table failed");
             info!("Deleted table: {}", table_name);
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     // Insert a row into a table
@@ -201,9 +220,12 @@ impl VibraDB {
         let key_clone = key.clone();
         let table_name_clone = table_name.to_string(); // Clone table_name here
         task::spawn_blocking(move || {
-            db.insert(key_clone, combined_data).expect("Insert row failed");
+            db.insert(key_clone, combined_data)
+                .expect("Insert row failed");
             info!("Inserted row into table {}: {}", table_name_clone, row.id); // Use cloned table_name
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     // Insert rows into a table
@@ -221,8 +243,12 @@ impl VibraDB {
             let mut cache = self.cache.write().unwrap();
             if let Some(value) = cache.get(&key) {
                 info!("Cache hit for key: {}", key);
-                let columns: Vec<(String, String)> = serde_json::from_str(value).expect("Deserialization failed");
-                return Some(Row { id: row_id.to_string(), columns });
+                let columns: Vec<(String, String)> =
+                    serde_json::from_str(value).expect("Deserialization failed");
+                return Some(Row {
+                    id: row_id.to_string(),
+                    columns,
+                });
             }
         }
         if let Some(ivec) = self.db.get(&key).expect("Get row failed") {
@@ -230,12 +256,19 @@ impl VibraDB {
             let (key, nonce) = key_nonce.split_at(AES_LAYERS * 32);
             match self.decrypt_value(encrypted_data, key, nonce) {
                 Ok(decrypted_value) => {
-                    let columns: Vec<(String, String)> = serde_json::from_str(&decrypted_value).expect("Deserialization failed");
+                    let columns: Vec<(String, String)> =
+                        serde_json::from_str(&decrypted_value).expect("Deserialization failed");
                     let mut cache = self.cache.write().unwrap();
-                    cache.put(String::from_utf8(key.to_vec()).expect("Invalid UTF-8 sequence"), decrypted_value.clone());
+                    cache.put(
+                        String::from_utf8(key.to_vec()).expect("Invalid UTF-8 sequence"),
+                        decrypted_value.clone(),
+                    );
                     info!("Cache miss, fetched from DB and decrypted: {:?}", key);
-                    Some(Row { id: row_id.to_string(), columns })
-                },
+                    Some(Row {
+                        id: row_id.to_string(),
+                        columns,
+                    })
+                }
                 Err(err) => {
                     info!("Failed to decrypt value for key {:?}: {}", key, err);
                     None
@@ -266,8 +299,13 @@ impl VibraDB {
                 let mut cache = cache.write().unwrap();
                 cache.pop(key.as_str());
             }
-            info!("Deleted row from table {}: {}", table_name_clone, row_id_clone);
-        }).await.unwrap();
+            info!(
+                "Deleted row from table {}: {}",
+                table_name_clone, row_id_clone
+            );
+        })
+        .await
+        .unwrap();
     }
 
     // Truncate a table
@@ -301,7 +339,9 @@ impl VibraDB {
                 db.remove(key.as_bytes()).expect("Truncate table failed");
             }
             info!("Truncated table: {}", table_name);
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     // Truncate DB
@@ -314,7 +354,9 @@ impl VibraDB {
             cache.clear();
             db.clear().expect("Truncate DB failed");
             info!("Truncated DB");
-        }).await.unwrap();
+        })
+        .await
+        .unwrap();
     }
 
     // Delete DB
